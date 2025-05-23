@@ -181,15 +181,19 @@ export default function MeetingPage() {
           try {
             const data = JSON.parse(event.data);
             console.log("Received data:", data);
-            if (data.partial) {
-              // Optionally, you can show partials as a typing indicator elsewhere
-              // Do not add partials to the chat history
-            }
-            if (data.text && data.text.trim() !== '') {
+            
+            if (data.type === "partial") {
+              // Update status to show we're still listening
+              setBotStatus("listening");
+              // Optionally show partial results in UI
+              console.log("Partial result:", data.partial);
+            } else if (data.text && data.text.trim() !== '') {
               console.log("Adding candidate message to chat:", data.text);
               lastFinalMessageTime.current = Date.now();
               setMessages(prev => prev.filter(msg => msg.type !== 'partial'));
               setMessages(prev => [...prev, { type: "message", message: data.text, sender: "Candidate" }]);
+              // Keep status as listening for next utterance
+              setBotStatus("listening");
             }
           } catch (e) {
             console.error('Error parsing transcript:', e);

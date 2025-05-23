@@ -51,7 +51,11 @@ async def recognize(websocket):
                         partial = rec.PartialResult()
                         print("SENDING PARTIAL:", partial)
                         if partial.strip():  # Only send non-empty partials
-                            await websocket.send(partial)
+                            await websocket.send(json.dumps({
+                                "type": "partial",
+                                "partial": partial,
+                                "sender": "system"
+                            }))
                 else:
                     logger.warning(f"Client {client_id} sent non-bytes data")
             except websockets.ConnectionClosed:

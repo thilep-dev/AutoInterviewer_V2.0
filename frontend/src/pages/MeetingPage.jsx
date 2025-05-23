@@ -185,13 +185,19 @@ export default function MeetingPage() {
             if (data.type === "partial") {
               // Update status to show we're still listening
               setBotStatus("listening");
-              // Optionally show partial results in UI
-              console.log("Partial result:", data.partial);
-            } else if (data.text && data.text.trim() !== '') {
+              // Show partial results in UI
+              setMessages(prev => {
+                const filtered = prev.filter(msg => msg.type !== 'partial');
+                return [...filtered, { type: "partial", message: data.partial, sender: "Candidate" }];
+              });
+            } else if (data.type === "final" && data.text && data.text.trim() !== '') {
               console.log("Adding candidate message to chat:", data.text);
               lastFinalMessageTime.current = Date.now();
-              setMessages(prev => prev.filter(msg => msg.type !== 'partial'));
-              setMessages(prev => [...prev, { type: "message", message: data.text, sender: "Candidate" }]);
+              // Remove partial results and add final result
+              setMessages(prev => {
+                const filtered = prev.filter(msg => msg.type !== 'partial');
+                return [...filtered, { type: "message", message: data.text, sender: "Candidate" }];
+              });
               // Keep status as listening for next utterance
               setBotStatus("listening");
             }
@@ -291,25 +297,47 @@ export default function MeetingPage() {
   useEffect(() => {
     const processNextMessage = async () => {
       if (processingRef.current || botStatus === "speaking" || botStatus === "processing") return;
+      
+      // Find the next unprocessed message
       const nextIndex = messages.findIndex(
         (msg, idx) =>
           idx > lastProcessedIndex.current &&
           msg.sender === "Candidate" &&
-          msg.type === "message"
+          msg.type === "message"  // Only process final messages
       );
+
       if (nextIndex !== -1) {
         processingRef.current = true;
         setBotStatus("processing");
         const message = messages[nextIndex];
-        setConversationHistory(prev => [...prev, { role: "user", content: message.message }]);
-        const aiResponse = await getAIResponse(message.message);
-        setConversationHistory(prev => [...prev, { role: "assistant", content: aiResponse }]);
-        setBotStatus("speaking");
-        handleSendMessage(aiResponse);
-        lastProcessedIndex.current = nextIndex;
+        
+        try {
+          // Add user message to conversation history
+          setConversationHistory(prev => [...prev, { role: "user", content: message.message }]);
+          
+          // Call the API to generate response
+          const aiResponse = await getAIResponse(message.message);
+          
+          // Add AI response to conversation history
+          setConversationHistory(prev => [...prev, { role: "assistant", content: aiResponse }]);
+          
+          // Update UI with AI response
+          setBotStatus("speaking");
+          handleSendMessage(aiResponse);
+          
+          // Update last processed index
+          lastProcessedIndex.current = nextIndex;
+        } catch (error) {
+          console.error("Error processing message:", error);
+          handleSendMessage("I apologize, but I'm having trouble processing your response. Could you please repeat that?");
+        } finally {
+          processingRef.current = false;
+        }
       }
     };
+
     processNextMessage();
+    
     return () => {
       if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
     };

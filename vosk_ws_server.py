@@ -43,17 +43,22 @@ async def recognize(websocket):
                 if isinstance(data, bytes):
                     # Pass raw PCM bytes directly to Vosk
                     if rec.AcceptWaveform(data):
-                        result = rec.Result()
-                        print("SENDING FINAL:", result)
-                        logger.debug(f"Result for client {client_id}: {result}")
-                        await websocket.send(result)
+                        result = json.loads(rec.Result())
+                        if result.get("text", "").strip():
+                            print("SENDING FINAL:", result)
+                            logger.debug(f"Result for client {client_id}: {result}")
+                            await websocket.send(json.dumps({
+                                "type": "final",
+                                "text": result["text"],
+                                "sender": "system"
+                            }))
                     else:
-                        partial = rec.PartialResult()
-                        print("SENDING PARTIAL:", partial)
-                        if partial.strip():  # Only send non-empty partials
+                        partial = json.loads(rec.PartialResult())
+                        if partial.get("partial", "").strip():
+                            print("SENDING PARTIAL:", partial)
                             await websocket.send(json.dumps({
                                 "type": "partial",
-                                "partial": partial,
+                                "partial": partial["partial"],
                                 "sender": "system"
                             }))
                 else:

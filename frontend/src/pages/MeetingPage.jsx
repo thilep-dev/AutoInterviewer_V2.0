@@ -149,7 +149,7 @@ export default function MeetingPage() {
           // Prefer OGG/Opus if supported
           const preferredMimeType = MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')
             ? 'audio/ogg; codecs=opus'
-            : 'audio/webm';
+            : 'audio/webm; codecs=opus';
 
           try {
             mediaRecorder = new MediaRecorder(stream, { mimeType: preferredMimeType });

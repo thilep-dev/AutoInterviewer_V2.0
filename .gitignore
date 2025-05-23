@@ -1,56 +1,118 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.env
-.env*
-.venv/
-venv/
+*$py.class
+*.so
+.Python
+env/
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
 *.egg-info/
-.DS_Store
+.installed.cfg
+*.egg
 
 # Node.js
 node_modules/
-.npm/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
 *.log
 
-# React
-build/
-dist/
-*.env.local
-*.env.development.local
-*.env.test.local
-*.env.production.local
+# Coverage directory used by tools like istanbul
+coverage
 
-# OS
-Thumbs.db
-.DS_Store
-*.swp
+# nyc test coverage
+.nyc_output
 
-# VSCode
-.vscode/
+# Dependency directories
+jspm_packages/
 
-# Misc
-*.sqlite3
-*.db
-*.bak
-*.tmp
+# Optional npm cache directory
+.npm
 
-# Ignore resumes and uploads
-resumes/
-uploads/
+# Optional eslint cache
+.eslintcache
 
-# Ignore coverage and test output
-.coverage
-coverage/
-htmlcov/
+# Optional REPL history
+.node_repl_history
 
-# Ignore IDEs
-.idea/
-*.iml
+# Output of 'npm pack'
+*.tgz
 
-# Ignore secrets
-secrets.* 
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variable files
+.env
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+# Comment in the public line in if your project uses Gatsby and not Next.js
+# public
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Vosk model directory
+vosk-model-small-en-us-0.15/ 

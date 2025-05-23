@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import json
+import numpy as np
 from vosk import Model, KaldiRecognizer
 import logging
 
@@ -40,6 +41,7 @@ async def recognize(websocket):
             try:
                 data = await websocket.recv()
                 if isinstance(data, bytes):
+                    # Pass raw PCM bytes directly to Vosk
                     if rec.AcceptWaveform(data):
                         result = rec.Result()
                         print("SENDING FINAL:", result)

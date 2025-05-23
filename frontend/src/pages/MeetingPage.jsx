@@ -185,7 +185,7 @@ export default function MeetingPage() {
             if (data.type === "partial") {
               // Update status to show we're still listening
               setBotStatus("listening");
-              // Show partial results in UI
+              // Show partial results in UI and trigger processing
               setMessages(prev => {
                 const filtered = prev.filter(msg => msg.type !== 'partial');
                 return [...filtered, { type: "partial", message: data.partial, sender: "Candidate" }];
@@ -298,12 +298,12 @@ export default function MeetingPage() {
     const processNextMessage = async () => {
       if (processingRef.current || botStatus === "speaking" || botStatus === "processing") return;
       
-      // Find the next unprocessed message
+      // Find the next unprocessed message (either partial or final)
       const nextIndex = messages.findIndex(
         (msg, idx) =>
           idx > lastProcessedIndex.current &&
           msg.sender === "Candidate" &&
-          msg.type === "message"  // Only process final messages
+          (msg.type === "message" || msg.type === "partial")  // Process both partial and final messages
       );
 
       if (nextIndex !== -1) {

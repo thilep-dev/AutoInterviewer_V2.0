@@ -31,7 +31,12 @@ const CandidateForm = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file && file.type === 'application/pdf') {
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    if (file && allowedTypes.includes(file.type)) {
       setFormData(prev => ({
         ...prev,
         resume: file
@@ -39,7 +44,7 @@ const CandidateForm = () => {
     } else {
       toast({
         title: "Error",
-        description: "Please upload a PDF file",
+        description: "Please upload a PDF, DOC, or DOCX file",
         variant: "destructive"
       });
     }
@@ -50,16 +55,26 @@ const CandidateForm = () => {
     setIsLoading(true);
 
     try {
-      // First, parse the resume
-      const resumeFormData = new FormData();
-      resumeFormData.append('resume_file', formData.resume);
-      const resumeData = await axios.post('/api/resume/parse-resume', resumeFormData);
+      let resume_text = null;
+      let parsed_info = null;
+      if (formData.resume) {
+        // Upload and parse the resume file using FormData
+        const resumeFormData = new FormData();
+        resumeFormData.append('resume_file', formData.resume);
+        const resumeData = await axios.post('/api/resume/parse-resume', resumeFormData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        resume_text = formData.resume.name;
+        parsed_info = resumeData.data;
+      }
 
       // Then, create the candidate
       const candidateData = {
         ...formData,
-        resume_text: resumeData.data.full_text,
-        parsed_info: resumeData.data
+        resume_text,
+        parsed_info
       };
 
       const response = await axios.post('/api/candidates', candidateData);
@@ -68,7 +83,6 @@ const CandidateForm = () => {
         title: "Success",
         description: "Candidate added successfully"
       });
-
       navigate(`/candidate/${response.data.id}`);
     } catch (error) {
       toast({
@@ -134,12 +148,12 @@ const CandidateForm = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="resume">Resume (PDF)</Label>
+          <Label htmlFor="resume">Resume (PDF, DOC, DOCX)</Label>
           <Input
             id="resume"
             name="resume"
             type="file"
-            accept=".pdf"
+            accept=".pdf,.doc,.docx"
             onChange={handleFileChange}
             required
           />

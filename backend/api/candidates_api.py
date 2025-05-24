@@ -25,6 +25,7 @@ class CandidateOut(BaseModel):
     email: str
     phone: str
     experience: str
+    resume_text: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -36,6 +37,8 @@ def create_candidate(candidate: CandidateCreate, db: Session = Depends(get_db)):
         email=candidate.email,
         phone=candidate.phone,
         experience=candidate.experience,
+        resume_text=candidate.resume_text,
+        parsed_info=candidate.parsed_info
     )
     db.add(db_candidate)
     db.commit()

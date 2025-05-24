@@ -1,4 +1,7 @@
 import fitz  # PyMuPDF
+import docx
+import textract
+import os
 import re
 from typing import Dict, Any
 
@@ -15,7 +18,7 @@ class ResumeParser:
         return match.group(0) if match else ""
 
     def extract_phone(self, text: str) -> str:
-        phone_pattern = r'\+?[\d\s-()]{10,}'
+        phone_pattern = r'\+?[\d\s()\-]{10,}'
         match = re.search(phone_pattern, text)
         return match.group(0) if match else ""
 
@@ -33,23 +36,29 @@ class ResumeParser:
         return match.group(1) if match else ""
 
     def parse(self, file_path: str) -> Dict[str, Any]:
+        ext = os.path.splitext(file_path)[1].lower()
+        text = ""
         try:
-            # Open PDF
-            doc = fitz.open(file_path)
-            text = ""
-            for page in doc:
-                text += page.get_text()
-            doc.close()
-
-            # Extract information
-            parsed_info = {
-                "full_text": text,
-                "email": self.extract_email(text),
-                "phone": self.extract_phone(text),
-                "skills": self.extract_skills(text),
-                "experience": self.extract_experience(text)
-            }
-
-            return parsed_info
+            if ext == ".pdf":
+                doc = fitz.open(file_path)
+                for page in doc:
+                    text += page.get_text()
+                doc.close()
+            elif ext == ".docx":
+                doc = docx.Document(file_path)
+                text = "\n".join([para.text for para in doc.paragraphs])
+            elif ext == ".doc":
+                text = textract.process(file_path).decode("utf-8")
+            else:
+                raise Exception("Unsupported file type")
         except Exception as e:
-            raise Exception(f"Error parsing resume: {str(e)}") 
+            raise Exception(f"Error parsing resume: {str(e)}")
+
+        parsed_info = {
+            "full_text": text,
+            "email": self.extract_email(text),
+            "phone": self.extract_phone(text),
+            "skills": self.extract_skills(text),
+            "experience": self.extract_experience(text)
+        }
+        return parsed_info 

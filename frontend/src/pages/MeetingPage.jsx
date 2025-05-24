@@ -392,6 +392,30 @@ export default function MeetingPage() {
     }
   };
 
+  // Minimal TTS for AI Bot responses
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.sender === "AI Bot" && lastMsg.type === "message") {
+        try {
+          const voices = window.speechSynthesis.getVoices();
+          let preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
+            || voices.find(v => v.lang.startsWith('en'))
+            || voices[0];
+          const utterance = new window.SpeechSynthesisUtterance(lastMsg.message);
+          if (preferredVoice) utterance.voice = preferredVoice;
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+          window.speechSynthesis.cancel(); // Cancel any ongoing speech
+          window.speechSynthesis.speak(utterance);
+        } catch (err) {
+          console.error('TTS error:', err);
+        }
+      }
+    }
+  }, [messages]);
+
   if (error) return <div style={{ padding: "20px", color: "red" }}>{error}</div>;
 
   return (

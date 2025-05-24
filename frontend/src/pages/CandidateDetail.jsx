@@ -10,6 +10,8 @@ const CandidateDetail = () => {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', experience: '', skills: '', resumeUrl: '' });
+  const [newResume, setNewResume] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const fetchCandidate = async () => {
@@ -51,18 +53,41 @@ const CandidateDetail = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  const handleResumeFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) setNewResume(file);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
-      const updated = {
+      let resume_text = candidate.resume_text;
+      let parsed_info = candidate.parsed_info;
+      if (newResume) {
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('resume_file', newResume);
+        const uploadRes = await axios.post(
+          `/api/candidates/${candidate.id}/upload-resume`,
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        resume_text = newResume.name;
+        parsed_info = uploadRes.data.parsed_info;
+        setUploading(false);
+      }
+      // Now update the candidate with the new resume info (if any)
+      await axios.put(`/api/candidates/${candidate.id}`, {
         ...form,
+        resume_text,
+        parsed_info,
         skills: form.skills.split(',').map(s => s.trim())
-      };
-      await axios.put(`/api/candidates/${id}`, updated);
-      setCandidate({ ...candidate, ...updated });
+      });
+      setCandidate({ ...candidate, ...form, resume_text, parsed_info });
       setEditing(false);
       alert('Candidate updated.');
     } catch (err) {
+      setUploading(false);
       alert('Failed to update candidate.');
     }
   };
@@ -99,17 +124,42 @@ const CandidateDetail = () => {
             <input name="skills" value={form.skills} onChange={handleChange} className="border p-2 w-full" required />
           </div>
           <div className="mb-2">
-            <label className="block font-semibold">Resume URL:</label>
-            <input name="resumeUrl" value={form.resumeUrl} onChange={handleChange} className="border p-2 w-full" />
+            <label className="block font-semibold">Current Resume:</label>
+            {candidate.resume_text ? (
+              <a
+                href={`/api/candidates/${candidate.id}/resume`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 underline"
+              >
+                View / Download Resume
+              </a>
+            ) : (
+              <span className="text-gray-500">No resume uploaded</span>
+            )}
           </div>
-          <button type="submit" className="px-4 py-2 bg-green-500 text-white rounded mr-2">Save</button>
-          <button type="button" className="px-4 py-2 bg-gray-300 rounded" onClick={() => setEditing(false)}>Cancel</button>
+          <div className="mb-2">
+            <label className="block font-semibold">Upload New Resume:</label>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={handleResumeFileChange}
+              disabled={uploading}
+            />
+            {uploading && <span className="ml-2 text-blue-500">Uploading...</span>}
+          </div>
+          <button type="submit" className="px-4 py-2 bg-green-500 text-white rounded mr-2" disabled={uploading}>Save</button>
+          <button type="button" className="px-4 py-2 bg-gray-300 rounded" onClick={() => setEditing(false)} disabled={uploading}>Cancel</button>
         </form>
       ) : (
         <>
           <p><strong>Email:</strong> {candidate.email}</p>
           <p><strong>Experience:</strong> {candidate.experience} years</p>
-          <p><strong>Skills:</strong> {candidate.skills?.join(', ')}</p>
+          <p><strong>Skills:</strong> {
+            Array.isArray(candidate.skills)
+              ? candidate.skills.join(', ')
+              : (candidate.skills || '')
+          }</p>
           <p>
             <strong>Resume:</strong>
             {candidate.resume_text ? (

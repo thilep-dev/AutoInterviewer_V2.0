@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { Button } from '../components/ui/button';
 
 // Configure axios to use the correct backend URL
 axios.defaults.baseURL = 'http://localhost:8000';
@@ -91,6 +92,10 @@ export default function MeetingPage() {
   const processingRef = useRef(false);
   const lastFinalMessageTime = useRef(Date.now());
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [evaluation, setEvaluation] = useState(null);
+  const [showEvaluation, setShowEvaluation] = useState(false);
+  const navigate = useNavigate();
+  const { roomName: candidateId } = useParams();
 
   // Function to handle sending messages
   const handleSendMessage = (message) => {
@@ -293,39 +298,33 @@ export default function MeetingPage() {
     };
   }, []);
 
-  // Message processing effect
+  // Add a debug wrapper for setBotStatus
+  const debugSetBotStatus = (status) => {
+    console.log(`[setBotStatus] Changing status to: ${status}`);
+    setBotStatus(status);
+  };
+
+  // Message processing effect (only when botStatus is 'listening')
   useEffect(() => {
     const processNextMessage = async () => {
-      if (processingRef.current || botStatus === "speaking" || botStatus === "processing") return;
-      
+      if (processingRef.current || botStatus !== "listening") return;
       // Find the next unprocessed message (either partial or final)
       const nextIndex = messages.findIndex(
         (msg, idx) =>
           idx > lastProcessedIndex.current &&
           msg.sender === "Candidate" &&
-          (msg.type === "message" || msg.type === "partial")  // Process both partial and final messages
+          (msg.type === "message" || msg.type === "partial")
       );
-
       if (nextIndex !== -1) {
         processingRef.current = true;
-        setBotStatus("processing");
+        debugSetBotStatus("processing");
         const message = messages[nextIndex];
-        
         try {
-          // Add user message to conversation history
           setConversationHistory(prev => [...prev, { role: "user", content: message.message }]);
-          
-          // Call the API to generate response
           const aiResponse = await getAIResponse(message.message);
-          
-          // Add AI response to conversation history
           setConversationHistory(prev => [...prev, { role: "assistant", content: aiResponse }]);
-          
-          // Update UI with AI response
-          setBotStatus("speaking");
+          debugSetBotStatus("speaking"); // TTS effect will handle switching to listening
           handleSendMessage(aiResponse);
-          
-          // Update last processed index
           lastProcessedIndex.current = nextIndex;
         } catch (error) {
           console.error("Error processing message:", error);
@@ -335,27 +334,9 @@ export default function MeetingPage() {
         }
       }
     };
-
     processNextMessage();
-    
-    return () => {
-      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
-    };
+    // eslint-disable-next-line
   }, [messages, botStatus]);
-
-  // Timeout effect for speaking
-  useEffect(() => {
-    if (botStatus === "speaking") {
-      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
-      speakingTimeoutRef.current = setTimeout(() => {
-        setBotStatus("listening");
-        processingRef.current = false;
-      }, 3000);
-    }
-    return () => {
-      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
-    };
-  }, [botStatus]);
 
   // Start the interview on mount
   useEffect(() => {
@@ -392,96 +373,177 @@ export default function MeetingPage() {
     }
   };
 
-  // Minimal TTS for AI Bot responses
+  // Robust chunked TTS for AI Bot responses with debug logging and cleanup
   useEffect(() => {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.sender === "AI Bot" && lastMsg.type === "message") {
+        let isSpeaking = true;
         try {
           const voices = window.speechSynthesis.getVoices();
-          let preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
-            || voices.find(v => v.lang.startsWith('en'))
-            || voices[0];
-          const utterance = new window.SpeechSynthesisUtterance(lastMsg.message);
-          if (preferredVoice) utterance.voice = preferredVoice;
-          utterance.rate = 1.0;
-          utterance.pitch = 1.0;
-          utterance.volume = 1.0;
-          window.speechSynthesis.cancel(); // Cancel any ongoing speech
-          window.speechSynthesis.speak(utterance);
+          let preferredVoice = voices.find(v =>
+            v.lang.toLowerCase().startsWith('en') &&
+            v.name.toLowerCase().includes('female')
+          ) || voices.find(v =>
+            v.lang.toLowerCase().startsWith('en') &&
+            v.name.toLowerCase().includes('woman')
+          ) || voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0];
+
+          const sentences = lastMsg.message.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [lastMsg.message];
+          let idx = 0;
+
+          function speakNext() {
+            if (idx === 0) {
+              debugSetBotStatus("speaking");
+              console.log("TTS: speaking started");
+            }
+            if (idx < sentences.length) {
+              const utterance = new window.SpeechSynthesisUtterance(sentences[idx]);
+              if (preferredVoice) utterance.voice = preferredVoice;
+              utterance.rate = 1.0;
+              utterance.pitch = 1.0;
+              utterance.volume = 1.0;
+              utterance.onend = () => {
+                idx++;
+                speakNext();
+              };
+              utterance.onerror = () => {
+                isSpeaking = false;
+                debugSetBotStatus("listening");
+                console.log("TTS: error, switching to listening");
+              };
+              window.speechSynthesis.speak(utterance);
+            } else {
+              isSpeaking = false;
+              debugSetBotStatus("listening");
+              console.log("TTS: finished, switching to listening");
+            }
+          }
+          window.speechSynthesis.cancel();
+          speakNext();
+
+          // Cleanup: if component unmounts or new message comes in, cancel speech
+          return () => {
+            window.speechSynthesis.cancel();
+            if (isSpeaking) {
+              debugSetBotStatus("listening");
+              console.log("TTS: cleanup, switching to listening");
+            }
+          };
         } catch (err) {
+          debugSetBotStatus("listening");
           console.error('TTS error:', err);
         }
       }
     }
+    // eslint-disable-next-line
   }, [messages]);
+
+  const handleCompleteInterview = async () => {
+    debugSetBotStatus("processing");
+    try {
+      const response = await axios.post("/api/llm/evaluate_candidate", {
+        candidate_id: candidateId,
+        conversation: conversationHistory
+      });
+      setEvaluation(response.data.evaluation);
+      setShowEvaluation(true);
+      debugSetBotStatus("completed");
+    } catch (error) {
+      setEvaluation("Error evaluating candidate.");
+      setShowEvaluation(true);
+      debugSetBotStatus("completed");
+    }
+  };
 
   if (error) return <div style={{ padding: "20px", color: "red" }}>{error}</div>;
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <div style={{ 
-        padding: "20px", 
-        background: "#f8f9fa", 
-        borderBottom: "1px solid #dee2e6",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-      }}>
-        <h2>Interview Room: {roomName}</h2>
-        <p>Your ID: {identity.current}</p>
-        <p style={{ color: isConnected ? "#28a745" : "#dc3545" }}>
-          Status: {isConnected ? "Connected" : "Disconnected"}
-        </p>
-      </div>
-      
-      <div style={{ 
-        display: "flex", 
-        flex: 1, 
-        padding: "20px",
-        gap: "20px"
-      }}>
-        <div style={{ flex: 2 }}>
+      {/* Evaluation Screen */}
+      {showEvaluation ? (
+        <div style={{ padding: 32 }}>
+          <h2>Interview Evaluation</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', background: '#f8f9fa', padding: 16, borderRadius: 8 }}>
+            {evaluation}
+          </pre>
+          <Button onClick={() => navigate("/")}>Back to Dashboard</Button>
+        </div>
+      ) : (
+        <>
           <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "1fr 1fr", 
-            gap: "20px",
-            marginBottom: "20px"
+            padding: "20px", 
+            background: "#f8f9fa", 
+            borderBottom: "1px solid #dee2e6",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
           }}>
-            <div style={{ 
-              background: "#000", 
-              borderRadius: "8px", 
-              overflow: "hidden",
-              aspectRatio: "16/9"
-            }}>
-              <video
-                ref={localVideoRef}
-                autoPlay
-                muted
-                playsInline
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </div>
-            <div style={{ 
-              background: "#000", 
-              borderRadius: "8px", 
-              overflow: "hidden",
-              aspectRatio: "16/9"
-            }}>
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            <h2>Interview Room: {roomName}</h2>
+            <p>Your ID: {identity.current}</p>
+            <p style={{ color: isConnected ? "#28a745" : "#dc3545" }}>
+              Status: {isConnected ? "Connected" : "Disconnected"}
+            </p>
+          </div>
+          
+          <div style={{ 
+            display: "flex", 
+            flex: 1, 
+            padding: "20px",
+            gap: "20px"
+          }}>
+            <div style={{ flex: 2 }}>
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "1fr 1fr", 
+                gap: "20px",
+                marginBottom: "20px"
+              }}>
+                <div style={{ 
+                  background: "#000", 
+                  borderRadius: "8px", 
+                  overflow: "hidden",
+                  aspectRatio: "16/9"
+                }}>
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </div>
+                <div style={{ 
+                  background: "#000", 
+                  borderRadius: "8px", 
+                  overflow: "hidden",
+                  aspectRatio: "16/9"
+                }}>
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </div>
+              </div>
+              <AIBot
+                messages={messages}
+                onSendMessage={handleSendMessage}
+                isConnected={isConnected}
+                botStatus={botStatus}
               />
             </div>
           </div>
-          <AIBot
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isConnected={isConnected}
-            botStatus={botStatus}
-          />
-        </div>
-      </div>
+          {/* Complete Interview Button */}
+          <div style={{ padding: 24, textAlign: 'center' }}>
+            <Button
+              onClick={handleCompleteInterview}
+              disabled={botStatus === "processing" || botStatus === "speaking"}
+            >
+              Complete Interview
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 } 
